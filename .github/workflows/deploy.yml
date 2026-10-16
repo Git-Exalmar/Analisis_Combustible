@@ -1,35 +1,9 @@
-name: Deploy to Azure Container Instances
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
-
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Log in to Azure Container Registry
-      uses: azure/docker-login@v1
-      with:
-        login-server: regflotacombustible.azurecr.io
-        username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
-        password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
-
-    - name: Build and Push Docker Image
-      run: |
-        docker build -t regflotacombustible.azurecr.io/streamlit-app:latest .
-        docker push regflotacombustible.azurecr.io/streamlit-app:latest
-
     - name: Update Azure Container Instance
+      env:
+        DB_USER_INDICADORES: ${{ secrets.DB_USER_INDICADORES }}
+        DB_PASS_INDICADORES: ${{ secrets.DB_PASS_INDICADORES }}
+        DB_USER_QAS: ${{ secrets.DB_USER_QAS }}
+        DB_PASS_QAS: ${{ secrets.DB_PASS_QAS }}
       run: |
         az container create \
           --resource-group "prod-nuevo" \
@@ -43,4 +17,8 @@ jobs:
           --registry-login-server regflotacombustible.azurecr.io \
           --registry-username "${{ secrets.AZURE_REGISTRY_USERNAME }}" \
           --registry-password "${{ secrets.AZURE_REGISTRY_PASSWORD }}" \
-          --secure-environment-variables DB_USER_INDICADORES="srios" DB_PASS_INDICADORES="Sebastian2026" DB_USER_QAS="calidadsa" DB_PASS_QAS="Exalmar\$2026"
+          --secure-environment-variables \
+            DB_USER_INDICADORES="$DB_USER_INDICADORES" \
+            DB_PASS_INDICADORES="$DB_PASS_INDICADORES" \
+            DB_USER_QAS="$DB_USER_QAS" \
+            DB_PASS_QAS="$DB_PASS_QAS"
