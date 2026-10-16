@@ -10,3 +10,4 @@ seaborn==0.13.2
 python-dotenv==1.2.2
 scikit-learn==1.8.0
 xlsxwriter==3.2.9
+pyarrow==23.0.1
