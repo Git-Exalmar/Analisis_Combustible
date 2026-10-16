@@ -9,3 +9,9 @@ venv/
 
 # Editor
 .vscode/
+
+# Datos y modelos generados localmente
+data/
+modelos/
+*.parquet
+.ipynb_checkpoints/
