@@ -5,7 +5,7 @@ SELECT
     TRY_CAST([latitud] AS float) AS Latitud, 
     TRY_CAST([longitud] AS float) AS Longitud, 
     TRY_CAST([velocidad] AS float) AS Velocidad, 
-    [rumbo] AS Rumbo, 
+    TRY_CAST([rumbo] AS int) AS Rumbo, 
     TRY_CAST([consumo_gal_h] AS float) AS gal_h, 
     TRY_CAST([rpm] AS float) AS rpm 
     FROM 

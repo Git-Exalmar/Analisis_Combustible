@@ -3,10 +3,10 @@ SELECT
     m.id, 
     e.Embarcacion AS ep, 
     m.fecha, 
-    TRY_CAST(m.Latitude AS float) AS Latitud, 
-    TRY_CAST(m.Longitude AS float) AS Longitud, 
+    TRY_CAST(m.Latitude  AS float) / 60000.0 AS Latitud,   -- origen: milésimas de minuto
+    TRY_CAST(m.Longitude AS float) / 60000.0 AS Longitud,
     TRY_CAST(m.Speed AS float) / 10.0 AS Velocidad, 
-    m.header AS Rumbo, 
+    TRY_CAST(m.header AS int) AS Rumbo,, 
     TRY_CAST(m.parameter12 AS float) / 3.785 AS gal_h, -- factor de conversión
     TRY_CAST(m.parameter02 AS float) AS rpm 
     FROM 
