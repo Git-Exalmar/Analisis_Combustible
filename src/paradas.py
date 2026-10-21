@@ -40,8 +40,19 @@ def detectar_paradas(tel: pd.DataFrame, vel_max=2.0, min_registros=2, hueco_max_
         lat_fin=("Latitud", "last"), lon_fin=("Longitud", "last"),
     )
     # contexto: velocidad justo antes (primer registro del tramo) y justo después (último)
-    p["vel_antes"] = t[lento].groupby("tramo").apply(lambda g: vel_prev.loc[g.index[0]])
-    p["vel_despues"] = t[lento].groupby("tramo").apply(lambda g: vel_next.loc[g.index[-1]])
+    p["vel_antes"] = t[lento].groupby("tramo").apply(lambda g: vel_prev.loc[g.index[0]], include_groups=False)
+    p["vel_despues"] = t[lento].groupby("tramo").apply(lambda g: vel_next.loc[g.index[-1]], include_groups=False)
+
+    # contexto de rumbo (requiere CambioRumboGPS de src/rumbo.py): giro en los 2 registros
+    # antes de detenerse (cerco) y en los 2 registros después de arrancar
+    if "CambioRumboGPS" in t:
+        giro = t["CambioRumboGPS"].fillna(0)
+        g_prev = t.groupby("ep")["CambioRumboGPS"].transform(lambda s: s.fillna(0).shift(1).rolling(2).sum())
+        g_next = t.groupby("ep")["CambioRumboGPS"].transform(lambda s: s.fillna(0)[::-1].shift(1).rolling(2).sum()[::-1])
+        p["giro_antes"] = t[lento].groupby("tramo").apply(lambda g: g_prev.loc[g.index[0]], include_groups=False)
+        p["giro_despues"] = t[lento].groupby("tramo").apply(lambda g: g_next.loc[g.index[-1]], include_groups=False)
+    if "DistPuertoKm" in t:
+        p["dist_puerto_km"] = t[lento].groupby("tramo")["DistPuertoKm"].median()
 
     p = p[p["n_registros"] >= min_registros].reset_index(drop=True)
     p["duracion_min"] = (p["fin"] - p["inicio"]).dt.total_seconds() / 60 + 15

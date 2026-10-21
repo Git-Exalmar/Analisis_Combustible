@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 CALA, IDA, BUSQUEDA, RETORNO = "cala", "ida", "busqueda", "retorno"
+ENTRADA, SALIDA = "entrada_cala", "salida_cala"
 SIN_VIAJE, SIN_CALA = "sin_viaje", "viaje_sin_cala"
 
 
@@ -24,7 +25,8 @@ def ventanas_finales(ventanas: pd.DataFrame, dur_min=30, dur_max=150, dur_defect
 
 
 def etiquetar(tel_v: pd.DataFrame, ventanas: pd.DataFrame, vel_crucero=8.5,
-              registros_sostenido=2) -> pd.DataFrame:
+              registros_sostenido=2, min_transicion=35, vel_detenida=2.0,
+              registros_entrada=1) -> pd.DataFrame:
     """Asigna una etiqueta a cada registro de telemetría con viaje.
 
     Reglas por viaje con calas:
@@ -33,6 +35,10 @@ def etiquetar(tel_v: pd.DataFrame, ventanas: pd.DataFrame, vel_crucero=8.5,
       ida      -> desde el zarpe hasta la primera vez que la velocidad baja de
                   vel_crucero durante `registros_sostenido` registros seguidos
       busqueda -> el resto antes de la primera cala y entre calas
+      entrada_cala -> el (los `registros_entrada`) último(s) registro(s) en movimiento (>= vel_detenida) dentro de los
+                  `min_transicion` minutos previos al inicio de la cala (frenado y cerco)
+      salida_cala  -> el primer registro en movimiento dentro de los `min_transicion`
+                  minutos posteriores al fin de la cala (arranque)
     Viajes sin calas -> 'viaje_sin_cala'; registros sin viaje -> 'sin_viaje'.
     """
     t = tel_v.sort_values(["ep", "fecha"]).copy()
@@ -66,6 +72,17 @@ def etiquetar(tel_v: pd.DataFrame, ventanas: pd.DataFrame, vel_crucero=8.5,
         else:
             ida_idx = vel.index
         etiqueta[ida_idx] = IDA
+
+        # transiciones: se aplican al final para que prevalezcan sobre ida/búsqueda/retorno
+        vel_v = t.loc[idx, "Velocidad"]
+        margen = pd.Timedelta(minutes=min_transicion)
+        for _, c in w.iterrows():
+            previos = f[(f >= c["Inicio"] - margen) & (f < c["Inicio"])].index
+            previos = [i for i in previos if vel_v[i] >= vel_detenida and etiqueta[i] != CALA][-registros_entrada:]
+            etiqueta[previos] = ENTRADA
+            siguientes = f[(f > c["Fin"]) & (f <= c["Fin"] + margen)].index
+            siguientes = [i for i in siguientes if vel_v[i] >= vel_detenida and etiqueta[i] != CALA][:1]
+            etiqueta[siguientes] = SALIDA
 
         t.loc[idx, "Etiqueta"] = etiqueta
     return t
