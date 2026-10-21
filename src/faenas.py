@@ -16,6 +16,8 @@ def preparar(faenas: pd.DataFrame, calas: pd.DataFrame):
     for c in [c for c in f.columns if c.startswith("FechaHora")]:
         f[c] = pd.to_datetime(f[c], errors="coerce")
     f["Embarcacion"] = f["Embarcacion"].astype(str).str.strip().str.upper()
+    if "PuertoZarpe" in f:
+        f["PuertoZarpe"] = f["PuertoZarpe"].str.strip().str.upper()
     c = calas.rename(columns={"FechaHoraCala": "HoraRegistrada"}).copy()
     c["HoraRegistrada"] = pd.to_datetime(c["HoraRegistrada"], errors="coerce")
     c = c.dropna(subset=["IdFaena", "HoraRegistrada"]).drop_duplicates(["IdFaena", "HoraRegistrada"])
@@ -38,8 +40,31 @@ def construir_viajes(faenas: pd.DataFrame, calas: pd.DataFrame):
 
     # 2. Calas con la clave de viaje (embarcación + zarpe) de su faena
     clave = ["IND_IdEmbarcacion", "FechaHoraZarpe"]
+    obs.append(("calas duplicadas (misma faena y hora, descartadas)",
+                int(calas.dropna(subset=["IdFaena"]).duplicated(["IdFaena", "FechaHoraCala"]).sum())))
+    n_tabla = len(c)
     c = c.merge(df[["IdFaena"] + clave], on="IdFaena", how="inner")
-    obs.append(("calas sin faena válida (descartadas)", int(len(calas) - len(c))))
+    obs.append(("calas sin faena válida (descartadas)", int(n_tabla - len(c))))
+    c["FuenteCala"] = "tabla de calas"
+
+    # 2b. Faenas sin IdFaena: sus calas no están en la tabla de calas.
+    #     Respaldo parcial con la primera y la última cala que trae la faena.
+    sin_id = df[df["IdFaena"].isna()]
+    respaldo = pd.concat([
+        sin_id[clave + [col]].rename(columns={col: "HoraRegistrada"})
+        for col in ["FechaHoraPrimeraCala", "FechaHoraUltimaCala"] if col in sin_id
+    ]).dropna(subset=["HoraRegistrada"]).drop_duplicates()
+    respaldo["IdFaena"] = pd.NA
+    respaldo["FuenteCala"] = "faena (sin IdFaena)"
+    obs.append(("calas de respaldo para faenas sin IdFaena", len(respaldo)))
+    c = pd.concat([c, respaldo], ignore_index=True)
+
+    # 2c. Control: faenas donde NumeroCalas no coincide con la tabla de calas
+    if "NumeroCalas" in df:
+        conteo = c[c["FuenteCala"] == "tabla de calas"].groupby("IdFaena").size()
+        con_id = df[df["IdFaena"].notna()].set_index("IdFaena")
+        dif = con_id["NumeroCalas"].fillna(0) != conteo.reindex(con_id.index).fillna(0)
+        obs.append(("faenas con NumeroCalas distinto a la tabla (se usa la tabla)", int(dif.sum())))
 
     # 3. Un registro por viaje: se prioriza el que tiene arribo real
     prioridad = df["FechaHoraArriboReal"].notna().astype(int) * 2 + \
@@ -80,7 +105,7 @@ def construir_viajes(faenas: pd.DataFrame, calas: pd.DataFrame):
     viajes.insert(0, "IdViaje", viajes.index + 1)
     c = c.merge(viajes[["IdViaje"] + clave], on=clave)
     c["NumCala"] = c.groupby("IdViaje").cumcount() + 1
-    c = _tiempo_disponible(c[["IdViaje", "NumCala", "IdFaena", "HoraRegistrada"]], viajes)
+    c = _tiempo_disponible(c[["IdViaje", "NumCala", "IdFaena", "HoraRegistrada", "FuenteCala"]], viajes)
     return viajes, c, pd.DataFrame(obs, columns=["observacion", "filas"])
 
 

@@ -26,13 +26,20 @@ FUENTES = {
         "password": os.getenv("DB_PASS_QAS"),
         "trust_cert": "no",
     },
+        "silver": {
+        "server": os.getenv("DB_SERVER_SILVER"),
+        "database": os.getenv("DB_NAME_SILVER", "BD_DWH_SILVER"),
+        "user": os.getenv("DB_USER_SILVER"),
+        "password": os.getenv("DB_PASS_SILVER"),
+        "trust_cert": os.getenv("DB_TRUST_CERT_SILVER", "yes"),
+    }
 }
 
 
 def cadena_conexion(fuente: str) -> str:
     c = FUENTES[fuente]
-    if not c["user"] or not c["password"]:
-        raise ValueError(f"Faltan credenciales de '{fuente}' en el .env")
+    if not c["server"] or not c["user"] or not c["password"]:
+        raise ValueError(f"Faltan datos de conexión de '{fuente}' en el .env")
     return (
         "DRIVER={ODBC Driver 18 for SQL Server};"
         f"SERVER={c['server']};DATABASE={c['database']};"
