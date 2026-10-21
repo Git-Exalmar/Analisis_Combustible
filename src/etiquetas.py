@@ -86,3 +86,51 @@ def etiquetar(tel_v: pd.DataFrame, ventanas: pd.DataFrame, vel_crucero=8.5,
 
         t.loc[idx, "Etiqueta"] = etiqueta
     return t
+
+
+ESPERA, PUERTO, MAR_SIN_FAENA = "espera", "puerto", "mar_sin_faena"
+
+
+def etiquetar_completo(tel_f: pd.DataFrame, ventanas_reg: pd.DataFrame, paradas_pu: pd.DataFrame,
+                       umbral_cala=0.5, umbral_no_cala=0.2, min_transicion=35, vel_detenida=2.0) -> pd.DataFrame:
+    """Etiquetas finales para entrenar el modelo por registro.
+
+    - Calas = registradas (ventanas_reg) + paradas del modelo PU con P_cala >= umbral_cala.
+    - Dentro de viaje: reglas de etiquetar() con todas esas calas (ida, búsqueda,
+      entrada, cala, salida, retorno).
+    - Paradas con P_cala < umbral_no_cala que no están en puerto -> espera.
+    - Fuera de viaje: puerto (Estado == 'puerto'); calas PU con su entrada y salida;
+      el resto queda como 'mar_sin_faena' (SIN etiqueta: no se usa para entrenar).
+    """
+    pu = paradas_pu.copy()
+    nuevas = pu[(pu["s"] == 0) & (pu["P_cala"] >= umbral_cala)]
+    v_nuevas = nuevas.loc[nuevas["IdViaje"].notna(), ["IdViaje", "inicio", "fin"]].rename(
+        columns={"inicio": "Inicio", "fin": "Fin"})
+    v_nuevas["MetodoVentana"] = "modelo_pu"
+    ventanas = pd.concat([ventanas_reg, v_nuevas], ignore_index=True)
+    ventanas["IdViaje"] = ventanas["IdViaje"].astype("Int64")
+
+    t = etiquetar(tel_f, ventanas, min_transicion=min_transicion, vel_detenida=vel_detenida)
+
+    # Fuera de viaje
+    fuera = t["IdViaje"].isna()
+    t.loc[fuera, "Etiqueta"] = np.where(t.loc[fuera, "Estado"].eq("puerto"), PUERTO, MAR_SIN_FAENA) \
+        if "Estado" in t else MAR_SIN_FAENA
+    margen = pd.Timedelta(minutes=min_transicion)
+    for _, c in nuevas[nuevas["IdViaje"].isna()].iterrows():
+        m = fuera & (t["ep"] == c["ep"])
+        f = t.loc[m, "fecha"]
+        t.loc[f[f.between(c["inicio"], c["fin"])].index, "Etiqueta"] = CALA
+        antes = f[(f >= c["inicio"] - margen) & (f < c["inicio"])].index
+        antes = [i for i in antes if t.at[i, "Velocidad"] >= vel_detenida][-1:]
+        t.loc[antes, "Etiqueta"] = ENTRADA
+        despues = f[(f > c["fin"]) & (f <= c["fin"] + margen)].index
+        despues = [i for i in despues if t.at[i, "Velocidad"] >= vel_detenida][:1]
+        t.loc[despues, "Etiqueta"] = SALIDA
+
+    # Esperas: paradas claramente no-cala fuera de puerto (dentro o fuera de viaje)
+    esperas = pu[(pu["P_cala"] < umbral_no_cala) & (pu["dist_puerto_km"] > 5)]
+    for _, e in esperas.iterrows():
+        m = (t["ep"] == e["ep"]) & t["fecha"].between(e["inicio"], e["fin"]) & (t["Etiqueta"] != CALA)
+        t.loc[m, "Etiqueta"] = ESPERA
+    return t

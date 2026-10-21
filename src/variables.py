@@ -21,8 +21,13 @@ FEATURES = (
     + ["Velocidad_std4", "Velocidad_min4", "Velocidad_max4"]
     + ["CambioRumboGPS", "GiroAcum3", "DesplazKm", "MinDesdeAnterior", "PosEnTramo"]
     + ["hora_sin", "hora_cos"]
-    + ["DistPuertoKm"]
+    + ["DistPuertoKm", "DistPuerto_delta", "DistPuerto_delta4"]
+    + ["MinFueraPuerto", "DistPuertoMax", "DistRelMax", "ParadasEnSalida", "MinDesdeParada"]
 )
+
+# Contexto del viaje: necesita la historia desde la última vez que estuvo en puerto.
+# En producción, el scoring debe cargar al menos HORAS_HISTORIA horas hacia atrás.
+HORAS_HISTORIA = 120
 
 
 def construir_variables(tel: pd.DataFrame, hueco_max_min=30, ventana=4) -> pd.DataFrame:
@@ -59,6 +64,33 @@ def construir_variables(tel: pd.DataFrame, hueco_max_min=30, ventana=4) -> pd.Da
     t["hora_sin"], t["hora_cos"] = np.sin(2 * np.pi * hora / 24), np.cos(2 * np.pi * hora / 24)
     if "DistPuertoKm" not in t:
         t["DistPuertoKm"] = np.nan
+    # ¿Se aleja (+) o se acerca (−) al puerto? Separa ida de retorno, que a la misma
+    # velocidad y rumbo recto son indistinguibles por lo demás.
+    t["DistPuerto_delta"] = t["DistPuertoKm"] - t.groupby("Tramo")["DistPuertoKm"].shift(1)
+    t["DistPuerto_delta4"] = t.groupby("Tramo")["DistPuerto_delta"].transform(
+        lambda s: s.rolling(4, min_periods=1).mean())
+    return agregar_contexto(t)
+
+
+def agregar_contexto(t: pd.DataFrame, radio_puerto=5, vel_parada=2.0) -> pd.DataFrame:
+    """Lo que ya hizo la embarcación desde que salió de puerto (solo pasado).
+    Separa ida de retorno: en el retorno ya paró y se está acercando desde su punto más lejano."""
+    ep = t["ep"]
+    en_puerto = t["DistPuertoKm"] <= radio_puerto
+    # cada entrada a puerto inicia una "salida" nueva
+    t["Salida"] = (en_puerto & ~en_puerto.groupby(ep).shift(1, fill_value=False)).groupby(ep).cumsum()
+    grupo = [ep, t["Salida"]]
+
+    ult_puerto = t["fecha"].where(en_puerto).groupby(ep).ffill()
+    t["MinFueraPuerto"] = (t["fecha"] - ult_puerto).dt.total_seconds() / 60
+    t["DistPuertoMax"] = t.groupby(grupo)["DistPuertoKm"].cummax()
+    t["DistRelMax"] = t["DistPuertoKm"] / t["DistPuertoMax"].clip(lower=1)
+
+    lento = (t["Velocidad"] < vel_parada) & ~en_puerto
+    inicio = lento & ~lento.groupby(ep).shift(1, fill_value=False)
+    t["ParadasEnSalida"] = inicio.groupby(grupo).cumsum()
+    ult_lento = t["fecha"].where(lento).groupby(grupo).ffill()
+    t["MinDesdeParada"] = (t["fecha"] - ult_lento).dt.total_seconds() / 60
     return t
 
 
