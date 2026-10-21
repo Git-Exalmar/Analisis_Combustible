@@ -1,6 +1,6 @@
 SET NOCOUNT ON; 
 SELECT 
-    m.id, 
+    CAST(m.id AS varchar(50)) AS id, 
     e.Embarcacion AS ep, 
     m.fecha, 
     TRY_CAST(m.Latitude  AS float) / 60000.0 AS Latitud,   -- origen: milésimas de minuto

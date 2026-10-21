@@ -1,5 +1,5 @@
 SELECT 
-    codigo AS id,
+    CAST(codigo AS varchar(50)) AS id,
     ep, 
     fecha_Registro AS fecha, 
     TRY_CAST(latitud  AS float) * 100000.0 / 60000.0 AS Latitud,   -- la vista divide entre 1e5 en vez de 6e4

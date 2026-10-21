@@ -1,5 +1,5 @@
 SELECT 
-    [codigo] AS id, 
+    CAST(codigo AS varchar(50)) AS id, 
     [ep], 
     [fecha_registro] AS fecha, 
     TRY_CAST([latitud] AS float) AS Latitud, 
