@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+node_modules/
 
 # Editor
 .vscode/
@@ -15,3 +16,4 @@ data/
 modelos/
 *.parquet
 .ipynb_checkpoints/
+Claude outputs/

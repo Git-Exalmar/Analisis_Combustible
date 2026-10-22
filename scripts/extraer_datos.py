@@ -17,6 +17,10 @@ EXTRACCIONES = {
     "metas": {
         "faenas": "metas/faenas.sql",
     },
+        "silver": {
+        "faenas": "operacion/faenas.sql",
+        "calas": "operacion/calas.sql",
+    },
     "telemetria": {
         "mp_m": "telemetria/mp_m.sql",
         "mp_e": "telemetria/mp_e.sql",
