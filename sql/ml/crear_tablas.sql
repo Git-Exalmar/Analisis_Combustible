@@ -26,7 +26,7 @@ CREATE TABLE ml.ActividadEmbarcacion (
 CREATE INDEX IX_Actividad_Fecha ON ml.ActividadEmbarcacion (FechaRegistro) INCLUDE (Actividad, Probabilidad);
 GO
 
--- Bitácora: una fila por ejecución del proceso (para monitorear que corre y su retraso)
+-- Bitácora: una fila por ejecución del proceso (para monitorear que corre y cuándo llegó el último dato)
 CREATE TABLE ml.ProcesoScoring (
     IdProceso         int IDENTITY(1,1) PRIMARY KEY,
     Inicio            datetime2(0) NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE ml.ProcesoScoring (
     RegistrosLeidos   int NULL,
     RegistrosEscritos int NULL,
     UltimoRegistro    datetime2(0) NULL,   -- registro más reciente recibido de Perú Controls
-    RetrasoMin        float NULL,          -- minutos entre ese registro y la hora del proceso
+    MinDesdeUltimo    float NULL,          -- minutos entre ese registro y la hora del proceso
     VersionModelo     varchar(20) NULL,
     Estado            varchar(10) NOT NULL,  -- 'ok' / 'error'
     Error             nvarchar(2000) NULL
