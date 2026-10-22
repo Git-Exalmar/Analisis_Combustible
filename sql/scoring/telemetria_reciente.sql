@@ -1,6 +1,6 @@
 -- Telemetría reciente de las dos fuentes vigentes (mp_e y mp_m).
 -- Mismas transformaciones que sql/telemetria/mp_e.sql y mp_m.sql.
--- El parámetro ? (dos veces) es la fecha desde la que se lee, en hora de Perú.
+-- Parámetros (?): desde y hasta, en hora de Perú, una vez por cada SELECT -> [desde, hasta, desde, hasta].
 SELECT
     CAST(codigo AS varchar(50)) AS id,
     ep,
@@ -15,6 +15,7 @@ SELECT
 FROM [BD_TEL_FLOTA_PRD].[dbo].[VW_MP_E_ORDENADO]
 WHERE rpm <> '0' AND consumo_gal_h <> '0'
   AND TRY_CAST(fecha_registro AS datetime2) >= ?
+  AND TRY_CAST(fecha_registro AS datetime2) <= ?
 
 UNION ALL
 
@@ -31,4 +32,5 @@ SELECT
     'mp_m' AS origen
 FROM [BD_TEL_FLOTA_PRD].[dbo].[VW_MP_M_ORDENADO]
 WHERE rpm <> '0' AND gal_h <> '0'
-  AND TRY_CAST(fecha_Registro AS datetime2) >= ?;
+  AND TRY_CAST(fecha_Registro AS datetime2) >= ?
+  AND TRY_CAST(fecha_Registro AS datetime2) <= ?;

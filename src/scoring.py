@@ -41,9 +41,11 @@ def cargar_paquete(nombre="actividad_v1.joblib") -> dict:
 
 
 def leer_telemetria_reciente(horas: float, ahora: dt.datetime | None = None) -> pd.DataFrame:
-    desde = (ahora or ahora_peru()) - dt.timedelta(hours=horas)
+    hasta = ahora or ahora_peru()
+    desde = hasta - dt.timedelta(hours=horas)
     with pyodbc.connect(cadena_conexion("telemetria")) as conn:
-        return pd.read_sql(leer_sql("scoring/telemetria_reciente.sql"), conn, params=[desde, desde])
+        return pd.read_sql(leer_sql("scoring/telemetria_reciente.sql"), conn,
+                           params=[desde, hasta, desde, hasta])
 
 
 def puntuar(tel: pd.DataFrame, paquete: dict, ahora: dt.datetime | None = None) -> pd.DataFrame:
@@ -67,15 +69,16 @@ def puntuar(tel: pd.DataFrame, paquete: dict, ahora: dt.datetime | None = None) 
     return res.reset_index(drop=True)
 
 
-def retraso_por_embarcacion(res: pd.DataFrame, ahora: dt.datetime) -> pd.DataFrame:
-    """Minutos desde el último registro recibido de cada embarcación."""
+def ultimo_por_embarcacion(res: pd.DataFrame, ahora: dt.datetime) -> pd.DataFrame:
+    """Minutos desde el último registro de cada embarcación (no es el retraso de Perú Controls:
+    también crece si la embarcación dejó de transmitir)."""
     u = res.groupby("ep")["fecha"].max().rename("UltimoRegistro").to_frame()
-    u["RetrasoMin"] = (ahora - u["UltimoRegistro"]).dt.total_seconds() / 60
-    return u.sort_values("RetrasoMin")
+    u["MinDesdeUltimo"] = (ahora - u["UltimoRegistro"]).dt.total_seconds() / 60
+    return u.sort_values("MinDesdeUltimo")
 
 
-def escribir_sql(nuevos: pd.DataFrame, desde: dt.datetime, fuente="resultados") -> int:
-    """Reemplaza en ml.ActividadEmbarcacion todo lo que hay desde `desde`.
+def escribir_sql(nuevos: pd.DataFrame, desde: dt.datetime, hasta: dt.datetime, fuente="telemetria") -> int:
+    """Reemplaza en ml.ActividadEmbarcacion lo que hay entre `desde` y `hasta`.
     Borrar + insertar en una sola transacción: si algo falla, no queda a medias,
     y si el proceso se ejecuta dos veces el resultado es el mismo."""
     d = nuevos[list(COLUMNAS_TABLA)].rename(columns=COLUMNAS_TABLA)
@@ -86,7 +89,8 @@ def escribir_sql(nuevos: pd.DataFrame, desde: dt.datetime, fuente="resultados") 
     try:
         cur = conn.cursor()
         cur.fast_executemany = True
-        cur.execute("DELETE FROM ml.ActividadEmbarcacion WHERE FechaRegistro >= ?", desde)
+        cur.execute("DELETE FROM ml.ActividadEmbarcacion WHERE FechaRegistro >= ? AND FechaRegistro <= ?",
+                    desde, hasta)
         if filas:
             cur.executemany(f"INSERT INTO ml.ActividadEmbarcacion ({cols}) VALUES ({marcas})", filas)
         conn.commit()
@@ -98,7 +102,7 @@ def escribir_sql(nuevos: pd.DataFrame, desde: dt.datetime, fuente="resultados") 
     return len(filas)
 
 
-def registrar_proceso(fuente="resultados", **campos) -> None:
+def registrar_proceso(fuente="telemetria", **campos) -> None:
     cols = ", ".join(campos)
     with pyodbc.connect(cadena_conexion(fuente), autocommit=True) as conn:
         conn.execute(f"INSERT INTO ml.ProcesoScoring ({cols}) VALUES ({', '.join('?' * len(campos))})",
